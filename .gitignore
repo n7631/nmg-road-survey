@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 数据库 - 云端部署时用 Supabase
+survey.db
+
+# IDE
+.vscode/
+.idea/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 临时脚本 / 测试文件
+read_excel.py
+read_word.py
+extract_data.py
+cleanup.py
+reset_db.py
+test_*.py
+final_setup.py
+
+# Excel / Word 原始文件（可选上传，Streamlit 不需要）
+*.xlsx
+*.docx
+*.doc
+*.pdf
+
+# 部署产物
+*.log
+*.tmp
