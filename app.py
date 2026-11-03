@@ -246,20 +246,20 @@ def page_expert_info():
                                             help="如未收到编号，留空即可，系统将自动生成")
         info['work_unit_type'] = st.selectbox("工作单位类型", 
             [""] + survey_data['专家信息选项']['工作单位类型'],
-            index=[""] + survey_data['专家信息选项']['工作单位类型'].index(info['work_unit_type']) if info.get('work_unit_type') in survey_data['专家信息选项']['工作单位类型'] else 0)
+            index=([""] + survey_data['专家信息选项']['工作单位类型']).index(info.get('work_unit_type', '')) if info.get('work_unit_type') in survey_data['专家信息选项']['工作单位类型'] else 0)
         info['profession'] = st.text_input("主要专业领域", value=info.get('profession', ''), placeholder="如：沥青路面设计、施工工艺、材料研究等")
         info['title'] = st.selectbox("职称", 
             [""] + survey_data['专家信息选项']['职称'],
-            index=[""] + survey_data['专家信息选项']['职称'].index(info['title']) if info.get('title') in survey_data['专家信息选项']['职称'] else 0)
+            index=([""] + survey_data['专家信息选项']['职称']).index(info.get('title', '')) if info.get('title') in survey_data['专家信息选项']['职称'] else 0)
         info['work_years'] = st.selectbox("相关工作年限", 
             [""] + survey_data['专家信息选项']['相关工作年限'],
-            index=[""] + survey_data['专家信息选项']['相关工作年限'].index(info['work_years']) if info.get('work_years') in survey_data['专家信息选项']['相关工作年限'] else 0)
+            index=([""] + survey_data['专家信息选项']['相关工作年限']).index(info.get('work_years', '')) if info.get('work_years') in survey_data['专家信息选项']['相关工作年限'] else 0)
         info['has_mongolia_experience'] = st.selectbox("是否具有内蒙古/寒区公路养护项目经验", 
             [""] + survey_data['专家信息选项']['内蒙古/寒区公路养护项目经验'],
-            index=[""] + survey_data['专家信息选项']['内蒙古/寒区公路养护项目经验'].index(info['has_mongolia_experience']) if info.get('has_mongolia_experience') in survey_data['专家信息选项']['内蒙古/寒区公路养护项目经验'] else 0)
+            index=([""] + survey_data['专家信息选项']['内蒙古/寒区公路养护项目经验']).index(info.get('has_mongolia_experience', '')) if info.get('has_mongolia_experience') in survey_data['专家信息选项']['内蒙古/寒区公路养护项目经验'] else 0)
         info['familiarity'] = st.selectbox("对本研究主题的熟悉程度", 
             [""] + survey_data['专家信息选项']['对研究主题的熟悉程度'],
-            index=[""] + survey_data['专家信息选项']['对研究主题的熟悉程度'].index(info['familiarity']) if info.get('familiarity') in survey_data['专家信息选项']['对研究主题的熟悉程度'] else 0)
+            index=([""] + survey_data['专家信息选项']['对研究主题的熟悉程度']).index(info.get('familiarity', '')) if info.get('familiarity') in survey_data['专家信息选项']['对研究主题的熟悉程度'] else 0)
     
     with col2:
         st.subheader("二、判断依据影响程度")
