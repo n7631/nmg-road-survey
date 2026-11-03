@@ -327,15 +327,20 @@ def page_structure_review():
             
             col_r1, col_r2, col_r3 = st.columns([2, 1, 1])
             with col_r2:
-                rating = st.radio("合理性评分", 
-                    ["未选择", "1", "2", "3", "4", "5", "无法判断"],
-                    key=f"struct_rating_{seq}", horizontal=True, index=0)
+                # 恢复上次选择
+                struct_opts = ["未选择", "1", "2", "3", "4", "5", "无法判断"]
+                prev_r = st.session_state.structure_reviews[key].get('结构合理性评分')
+                struct_idx = struct_opts.index(prev_r) if prev_r in struct_opts else 0
+                rating = st.radio("合理性评分", struct_opts,
+                    key=f"struct_rating_{seq}", horizontal=True, index=struct_idx)
                 st.session_state.structure_reviews[key]['结构合理性评分'] = rating if rating != "未选择" else None
             
             with col_r3:
-                suggestion = st.selectbox("处理建议",
-                    ["未选择"] + survey_data['填写说明']['处理建议选项'],
-                    key=f"struct_suggest_{seq}", index=0)
+                sugg_opts = ["未选择"] + survey_data['填写说明']['处理建议选项']
+                prev_s = st.session_state.structure_reviews[key].get('处理建议')
+                s_idx = sugg_opts.index(prev_s) if prev_s in sugg_opts else 0
+                suggestion = st.selectbox("处理建议", sugg_opts,
+                    key=f"struct_suggest_{seq}", index=s_idx)
                 st.session_state.structure_reviews[key]['处理建议'] = suggestion if suggestion != "未选择" else None
             
             suggestion_detail = st.text_input("修改意见（选填）", 
@@ -409,16 +414,22 @@ def indicator_module(level1_name, indicators, page_num, total_pages):
                             st.markdown(f"**{dim_name}**")
                             st.caption(dim_tip)
                         with col_r2:
-                            rating = st.radio("",
-                                ["未选择", "1分", "2分", "3分", "4分", "5分", "无法判断"],
-                                key=f"rate_{code}_{dim_name}", horizontal=True, label_visibility="collapsed", index=0)
+                            # 恢复上次选择，未选过则默认为"未选择"
+                            prev = st.session_state.indicator_ratings[code].get(dim_name)
+                            options = ["未选择", "1分", "2分", "3分", "4分", "5分", "无法判断"]
+                            index = options.index(prev) if prev in options else 0
+                            rating = st.radio("", options,
+                                key=f"rate_{code}_{dim_name}", horizontal=True,
+                                label_visibility="collapsed", index=index)
                             st.session_state.indicator_ratings[code][dim_name] = rating if rating != "未选择" else None
                 
                 with col2:
                     st.markdown("**处理建议**")
-                    suggestion = st.radio("",
-                        survey_data['填写说明']['处理建议选项'],
-                        key=f"sugg_{code}", label_visibility="collapsed", index=0,
+                    sugg_options = survey_data['填写说明']['处理建议选项']
+                    prev_sugg = st.session_state.indicator_ratings[code].get('处理建议')
+                    sugg_index = sugg_options.index(prev_sugg) if prev_sugg in sugg_options else 0
+                    suggestion = st.radio("", sugg_options,
+                        key=f"sugg_{code}", label_visibility="collapsed", index=sugg_index,
                         help='选择"修改后保留/合并/限定适用范围/删除"时建议填写下方意见')
                     st.session_state.indicator_ratings[code]['处理建议'] = suggestion
                     
@@ -567,9 +578,23 @@ def page_submit():
     nav_buttons(show_submit_warning=True)
 
 # ============ 通用导航 ============
+PAGE_NAMES = {
+    1: "📋 咨询说明",
+    2: "👤 专家信息",
+    3: "🏗️ 结构审查",
+    4: "🛠️ 设计后评价",
+    5: "🏗️ 施工后评价",
+    6: "🔍 技术状况后评价",
+    7: "💰 经济社会效益后评价",
+    8: "💡 补充指标建议",
+    9: "✅ 确认并提交",
+}
+
 def nav_buttons(show_submit_warning=False):
     st.markdown("---")
-    col1, col2, col3 = st.columns([1, 3, 1])
+    
+    # 页面跳转（中间）
+    col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
     
     with col1:
         if st.session_state.page > 1:
@@ -577,7 +602,21 @@ def nav_buttons(show_submit_warning=False):
         else:
             st.write("")
     
-    with col3:
+    with col2:
+        current_name = PAGE_NAMES.get(st.session_state.page, f"第{st.session_state.page}步")
+        st.markdown(f"**当前：{current_name}**")
+        page_options = [f"{i}. {PAGE_NAMES[i]}" for i in range(1, 10)]
+        page_labels = list(PAGE_NAMES.values())
+        jump_sel = st.selectbox("快速跳转", page_options,
+            index=st.session_state.page - 1, key="jump_selectbox",
+            help="可直接跳到任意填写步骤")
+        target_page = int(jump_sel.split(".")[0])
+        if target_page != st.session_state.page:
+            auto_save()
+            st.session_state.page = target_page
+            st.rerun()
+    
+    with col4:
         if st.session_state.page < 9:
             st.button("下一页 →", on_click=next_page, use_container_width=True, type="primary", key="next_btn")
         elif show_submit_warning:
