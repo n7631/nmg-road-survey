@@ -515,8 +515,12 @@ def count_admins():
 def delete_response(response_id, only_draft=True):
     """删除指定答卷。only_draft=True 时仅允许删除草稿，防止误删已提交数据。
     返回 (成功: bool, 说明: str)。"""
+    import traceback
     # 先查状态
-    resp = get_response(response_id)
+    try:
+        resp = get_response(response_id)
+    except Exception as e:
+        return False, f"查询答卷失败: {e}"
     if not resp:
         return False, "答卷不存在"
     if only_draft and resp.get('status') != 'draft':
@@ -524,7 +528,8 @@ def delete_response(response_id, only_draft=True):
     # 执行删除
     try:
         if BACKEND == "supabase" and _supabase_ready:
-            supabase_client.table("expert_responses").delete().eq("response_id", response_id).execute()
+            r = supabase_client.table("expert_responses").delete().eq("response_id", response_id).execute()
+            print(f"[DB] delete_response 响应: data={getattr(r, 'data', '?')}, count={getattr(r, 'count', '?')}")
         else:
             conn = _get_sqlite_conn()
             c = conn.cursor()
@@ -533,6 +538,8 @@ def delete_response(response_id, only_draft=True):
             conn.close()
         return True, "已删除"
     except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[DB] delete_response 失败: {e}\n{tb}")
         return False, f"删除失败: {e}"
 
 # ========== 批量删除草稿 ==========
