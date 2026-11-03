@@ -433,6 +433,35 @@ def page_responses_list():
     
     st.dataframe(df_display, use_container_width=True, hide_index=True)
     
+    # 批量清理草稿
+    drafts_count = len([r for r in all_resp if r.get('status') == 'draft'])
+    if drafts_count > 0:
+        st.markdown("---")
+        c1, c2 = st.columns([1, 4])
+        with c1:
+            confirm_key = "bulk_clear_drafts_confirm"
+            if confirm_key not in st.session_state:
+                st.session_state[confirm_key] = False
+            if st.button(f"🧹 清空所有草稿（共 {drafts_count} 份）", type="secondary"):
+                st.session_state[confirm_key] = True
+        with c2:
+            if st.session_state.get(confirm_key):
+                st.warning(f"确认删除全部 {drafts_count} 份草稿？已提交答卷不受影响。此操作不可恢复。")
+                ok_col, cancel_col = st.columns(2)
+                with ok_col:
+                    if st.button("✅ 确认清空", type="primary"):
+                        n = db.clear_all_drafts()
+                        st.session_state.pop(confirm_key, None)
+                        if n >= 0:
+                            st.success(f"已删除 {n} 份草稿")
+                        else:
+                            st.error("删除失败，请查看日志")
+                        st.rerun()
+                with cancel_col:
+                    if st.button("❌ 取消"):
+                        st.session_state.pop(confirm_key, None)
+                        st.rerun()
+    
     # 查看详情
     st.subheader("🔍 查看单份答卷详情")
     options = [f"{r.get('expert_name') or '(未填)'} - {r['response_id'][:8]} - {'已提交' if r['status'] == 'submitted' else '草稿'}" for r in all_resp]
@@ -443,6 +472,36 @@ def page_responses_list():
         resp = db.get_response(all_resp[resp_idx]['response_id'])
         if resp:
             show_response_detail(resp)
+            
+            # 草稿删除（二次确认）
+            st.markdown("---")
+            if resp.get('status') == 'draft':
+                col_a, col_b = st.columns([1, 3])
+                with col_a:
+                    confirm_key = f"del_confirm_{resp['response_id']}"
+                    if confirm_key not in st.session_state:
+                        st.session_state[confirm_key] = False
+                    if st.button("🗑️ 删除该草稿", key=f"del_btn_{resp['response_id']}", type="secondary"):
+                        st.session_state[confirm_key] = True
+                with col_b:
+                    if st.session_state[confirm_key]:
+                        st.warning(f"确认删除草稿 `{resp['response_id'][:12]}`？此操作不可恢复。")
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("✅ 确认删除", key=f"del_ok_{resp['response_id']}", type="primary"):
+                                ok, msg = db.delete_response(resp['response_id'], only_draft=True)
+                                if ok:
+                                    st.success(f"已删除。{msg}")
+                                    st.session_state.pop(confirm_key, None)
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+                        with c2:
+                            if st.button("❌ 取消", key=f"del_cancel_{resp['response_id']}"):
+                                st.session_state.pop(confirm_key, None)
+                                st.rerun()
+            else:
+                st.caption("ℹ️ 已提交答卷不可删除。如需作废请联系开发人员清空数据库。")
 
 def show_response_detail(resp):
     """显示单份答卷详情"""

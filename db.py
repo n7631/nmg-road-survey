@@ -511,6 +511,49 @@ def count_admins():
         conn.close()
         return n
 
+# ========== 单条删除 ==========
+def delete_response(response_id, only_draft=True):
+    """删除指定答卷。only_draft=True 时仅允许删除草稿，防止误删已提交数据。
+    返回 (成功: bool, 说明: str)。"""
+    # 先查状态
+    resp = get_response(response_id)
+    if not resp:
+        return False, "答卷不存在"
+    if only_draft and resp.get('status') != 'draft':
+        return False, f"该答卷状态为「{resp.get('status')}」，仅允许删除草稿"
+    # 执行删除
+    try:
+        if BACKEND == "supabase" and _supabase_ready:
+            supabase_client.table("expert_responses").delete().eq("response_id", response_id).execute()
+        else:
+            conn = _get_sqlite_conn()
+            c = conn.cursor()
+            c.execute("DELETE FROM expert_responses WHERE response_id=?", (response_id,))
+            conn.commit()
+            conn.close()
+        return True, "已删除"
+    except Exception as e:
+        return False, f"删除失败: {e}"
+
+# ========== 批量删除草稿 ==========
+def clear_all_drafts():
+    """删除所有草稿答卷，保留已提交答卷。返回删除条数。"""
+    try:
+        if BACKEND == "supabase" and _supabase_ready:
+            resp = supabase_client.table("expert_responses").delete().eq("status", "draft").execute()
+            return len(resp.data) if resp.data is not None else 0
+        else:
+            conn = _get_sqlite_conn()
+            c = conn.cursor()
+            c.execute("DELETE FROM expert_responses WHERE status='draft'")
+            n = c.rowcount
+            conn.commit()
+            conn.close()
+            return n
+    except Exception as e:
+        print(f"[DB] clear_all_drafts 失败: {e}")
+        return -1
+
 # ========== 导出清理函数 ==========
 def clear_all_responses():
     """清理所有答卷（测试后使用）"""
