@@ -487,6 +487,26 @@ def verify_admin(username, password):
         conn.close()
         return row and row[0] == pwd_hash
 
+def count_admins():
+    """统计管理员数量；返回 -1 表示表不存在或访问失败"""
+    if BACKEND == "supabase" and _supabase_ready:
+        try:
+            resp = supabase_client.table("admins").select("username").execute()
+            return len(resp.data or [])
+        except Exception as e:
+            print(f"[DB] Supabase count_admins 失败: {e}")
+            return -1
+    else:
+        conn = _get_sqlite_conn()
+        c = conn.cursor()
+        try:
+            c.execute("SELECT COUNT(*) FROM admins")
+            n = c.fetchone()[0]
+        except Exception:
+            n = 0
+        conn.close()
+        return n
+
 # ========== 导出清理函数 ==========
 def clear_all_responses():
     """清理所有答卷（测试后使用）"""

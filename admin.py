@@ -34,27 +34,12 @@ survey_data = load_survey_data()
 
 # ============ 登录验证 ============
 def check_admin_setup():
-    """检查是否需要初始化管理员"""
-    # 尝试验证一个不存在的用户，然后检查 backend
-    # 通过 verify_admin 无法区分"表不存在"和"密码错误"，这里用 init_admin 间接判断
-    # 简化方案：直接尝试创建一个特殊标记用户来检测
-    import sqlite3, os
-    if db.backend_info()['backend'] == 'sqlite':
-        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "survey.db")
-        if not os.path.exists(db_path):
-            return True
-        conn = sqlite3.connect(db_path)
-        c = conn.cursor()
-        try:
-            c.execute("SELECT COUNT(*) FROM admins")
-            count = c.fetchone()[0]
-        except Exception:
-            count = 0
-        conn.close()
-        return count == 0
-    else:
-        # Supabase：假设已在 SQL Editor 建表
-        return not db.verify_admin("_admin_probe_", "_nope_") and True  # 简化为允许初始化
+    """检查是否需要初始化管理员（SQLite / Supabase 通用）"""
+    count = db.count_admins()
+    if count < 0:
+        st.error("❌ 云数据库表不存在或无法访问，请先在 Supabase SQL Editor 执行建表 SQL（见 SUPABASE_SETUP.md）")
+        st.stop()
+    return count == 0
 
 def show_login():
     """显示登录页面"""
@@ -713,6 +698,13 @@ def main():
         ], label_visibility="collapsed")
         
         st.markdown("---")
+        
+        _info = db.backend_info()
+        if _info['backend'] == 'supabase':
+            st.success("☁️ 云数据库：Supabase 已连接")
+        else:
+            st.warning("⚠️ 本地 SQLite（云端部署下数据会丢失，请检查 Secrets）")
+        
         st.caption(f"管理员: {st.session_state.get('admin_username', '')}")
         if st.button("退出登录"):
             st.session_state.admin_logged_in = False
