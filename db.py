@@ -39,6 +39,10 @@ try:
     if url and key:
         try:
             from supabase import create_client
+            # 容错：去掉多余的空格、结尾斜杠和 /rest/v1 后缀（create_client 只接受项目根地址）
+            url = url.strip().rstrip("/")
+            if url.endswith("/rest/v1"):
+                url = url[: -len("/rest/v1")].rstrip("/")
             supabase_client = create_client(url, key)
             _supabase_ready = True
             BACKEND = "supabase"
