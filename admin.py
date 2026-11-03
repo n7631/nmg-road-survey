@@ -406,56 +406,88 @@ def page_responses_list():
         status_filter = st.selectbox("状态筛选", ["全部", "已提交", "草稿"])
     
     all_resp = db.get_all_responses()
-    df = pd.DataFrame(all_resp)
     
+    # 先按筛选条件过滤（保留 all_resp 用于详情下拉）
     if status_filter != "全部":
-        df = df[df['status'] == status_filter]
+        display_resp = [r for r in all_resp if r.get('status') == status_filter]
+    else:
+        display_resp = all_resp
     
-    if df.empty:
+    if not display_resp:
         st.info("暂无答卷数据")
         return
     
-    # 格式化显示
-    def format_row(row):
-        status_emoji = "✅" if row['status'] == 'submitted' else "✏️"
-        return f"{status_emoji} {row.get('expert_name') or '(未填)'} - {row['response_id'][:8]}"
+    # 清理 session_state 里已经不存在的勾选残留
+    for k in list(st.session_state.keys()):
+        if k.startswith("chk_") and not any(k[4:] == r['response_id'] for r in all_resp):
+            st.session_state.pop(k, None)
     
-    df['状态'] = df['status'].apply(lambda x: "✅ 已提交" if x == 'submitted' else "✏️ 草稿")
+    # 表头
+    head_cols = st.columns([0.5, 2, 1.5, 1.5, 2, 1, 1, 2, 2])
+    headers = ["☑", "问卷编号", "姓名", "单位类型", "专业领域", "进度%", "状态", "创建时间", "提交时间"]
+    for hc, h in zip(head_cols, headers):
+        with hc:
+            st.markdown(f"**{h}**")
+    st.markdown("---")
     
-    display_cols = ['response_id', 'expert_name', 'work_unit_type', 'profession', 
-                    'familiarity', 'progress_percent', 'status', 'created_at', 'submitted_at']
-    display_names = ['问卷编号', '姓名', '单位类型', '专业领域', '熟悉程度', 
-                     '进度%', '状态', '创建时间', '提交时间']
+    # 逐行渲染（草稿行前面加勾选框）
+    draft_ids = set(r['response_id'] for r in display_resp if r.get('status') == 'draft')
+    selected_ids = []
     
-    available_cols = [c for c in display_cols if c in df.columns]
-    df_display = df[available_cols].copy()
-    df_display.columns = display_names[:len(available_cols)]
+    for r in display_resp:
+        rid = r['response_id']
+        is_draft = r.get('status') == 'draft'
+        row_cols = st.columns([0.5, 2, 1.5, 1.5, 2, 1, 1, 2, 2])
+        with row_cols[0]:
+            if is_draft:
+                checked = st.checkbox("选", key=f"chk_{rid}", label_visibility="collapsed")
+                if checked:
+                    selected_ids.append(rid)
+            else:
+                # 已提交答卷显示灰色禁用勾选，不可选中删除
+                st.markdown("🔒")
+        with row_cols[1]:
+            st.code(rid[:16], language=None)
+        with row_cols[2]:
+            st.write(r.get('expert_name') or '(未填)')
+        with row_cols[3]:
+            st.write(r.get('work_unit_type') or '-')
+        with row_cols[4]:
+            st.write(r.get('profession') or '-')
+        with row_cols[5]:
+            st.write(f"{int(r.get('progress_percent') or 0)}%")
+        with row_cols[6]:
+            st.write("✏️ 草稿" if is_draft else "✅ 已提交")
+        with row_cols[7]:
+            st.write(str(r.get('created_at') or '')[:16].replace('T', ' '))
+        with row_cols[8]:
+            st.write(str(r.get('submitted_at') or '')[:16].replace('T', ' ') if r.get('submitted_at') else '-')
     
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
-    
-    # 批量清理草稿
-    drafts_count = len([r for r in all_resp if r.get('status') == 'draft'])
-    if drafts_count > 0:
+    # 批量删除选中的草稿
+    if selected_ids:
         st.markdown("---")
-        c1, c2 = st.columns([1, 4])
+        c1, c2 = st.columns([1, 3])
         with c1:
-            confirm_key = "bulk_clear_drafts_confirm"
+            confirm_key = "bulk_delete_selected_confirm"
             if confirm_key not in st.session_state:
                 st.session_state[confirm_key] = False
-            if st.button(f"🧹 清空所有草稿（共 {drafts_count} 份）", type="secondary"):
+            if st.button(f"🗑️ 删除选中草稿（{len(selected_ids)} 份）", type="secondary"):
                 st.session_state[confirm_key] = True
         with c2:
             if st.session_state.get(confirm_key):
-                st.warning(f"确认删除全部 {drafts_count} 份草稿？已提交答卷不受影响。此操作不可恢复。")
+                ids_preview = "、".join("`" + s[:12] + "`" for s in selected_ids[:5])
+                more = f" 等共 {len(selected_ids)} 份" if len(selected_ids) > 5 else ""
+                st.warning(f"确认删除以下草稿？{ids_preview}{more} 此操作不可恢复。")
                 ok_col, cancel_col = st.columns(2)
                 with ok_col:
-                    if st.button("✅ 确认清空", type="primary"):
-                        n = db.clear_all_drafts()
+                    if st.button("✅ 确认删除", type="primary"):
+                        ok_count = 0
+                        for sid in selected_ids:
+                            ok, _ = db.delete_response(sid, only_draft=True)
+                            if ok:
+                                ok_count += 1
                         st.session_state.pop(confirm_key, None)
-                        if n >= 0:
-                            st.success(f"已删除 {n} 份草稿")
-                        else:
-                            st.error("删除失败，请查看日志")
+                        st.success(f"已删除 {ok_count} 份草稿")
                         st.rerun()
                 with cancel_col:
                     if st.button("❌ 取消"):
@@ -463,6 +495,7 @@ def page_responses_list():
                         st.rerun()
     
     # 查看详情
+    st.markdown("---")
     st.subheader("🔍 查看单份答卷详情")
     options = [f"{r.get('expert_name') or '(未填)'} - {r['response_id'][:8]} - {'已提交' if r['status'] == 'submitted' else '草稿'}" for r in all_resp]
     selected = st.selectbox("选择答卷", options, key="response_detail_select")
