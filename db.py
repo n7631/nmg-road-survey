@@ -17,6 +17,8 @@ from datetime import datetime
 BACKEND = "sqlite"  # 默认
 supabase_client = None
 _supabase_ready = False
+SUPABASE_URL_VALUE = ""
+SUPABASE_KEY_VALUE = ""
 
 try:
     # 尝试从 Streamlit secrets 读取
@@ -35,6 +37,10 @@ try:
     
     url = _secrets_url or _env_url
     key = _secrets_key or _env_key
+    
+    # 保存为模块级变量，供 REST fallback 等函数使用
+    SUPABASE_URL_VALUE = (url or "").strip().rstrip("/")
+    SUPABASE_KEY_VALUE = (key or "")
     
     if url and key:
         try:
@@ -525,22 +531,39 @@ def delete_response(response_id, only_draft=True):
         return False, "答卷不存在"
     if only_draft and resp.get('status') != 'draft':
         return False, f"该答卷状态为「{resp.get('status')}」，仅允许删除草稿"
-    # 执行删除
-    try:
-        if BACKEND == "supabase" and _supabase_ready:
-            r = supabase_client.table("expert_responses").delete().eq("response_id", response_id).execute()
-            print(f"[DB] delete_response 响应: data={getattr(r, 'data', '?')}, count={getattr(r, 'count', '?')}")
-        else:
+    # 执行删除（两种方式都试，兼容不同版本 supabase-py）
+    if BACKEND == "supabase" and _supabase_ready:
+        try:
+            client = supabase_client
+            table = client.table("expert_responses")
+            result = table.delete().eq("response_id", response_id).execute()
+            print(f"[DB] delete_response OK via supabase-py: data={getattr(result, 'data', '?')}")
+            return True, "已删除"
+        except Exception as e1:
+            print(f"[DB] delete_response via supabase-py 失败: {e1}")
+            # 降级：直接用 REST DELETE（不依赖 supabase-py 内部实现）
+            try:
+                import requests as _requests
+                if SUPABASE_URL_VALUE and SUPABASE_KEY_VALUE:
+                    url_rest = f"{SUPABASE_URL_VALUE.rstrip('/')}/rest/v1/expert_responses?response_id=eq.{response_id}"
+                    r = _requests.delete(url_rest, headers={"apikey": SUPABASE_KEY_VALUE, "Authorization": f"Bearer {SUPABASE_KEY_VALUE}", "Prefer": "return=minimal"}, timeout=15)
+                    print(f"[DB] delete_response REST fallback: HTTP={r.status_code}")
+                    if r.status_code in (200, 204):
+                        return True, "已删除"
+                    return False, f"REST 失败 HTTP {r.status_code}: {r.text[:200]}"
+            except Exception as e2:
+                print(f"[DB] delete_response REST fallback 也失败: {e2}\n{traceback.format_exc()}")
+            return False, f"删除失败: {e1}"
+    else:
+        try:
             conn = _get_sqlite_conn()
             c = conn.cursor()
             c.execute("DELETE FROM expert_responses WHERE response_id=?", (response_id,))
             conn.commit()
             conn.close()
-        return True, "已删除"
-    except Exception as e:
-        tb = traceback.format_exc()
-        print(f"[DB] delete_response 失败: {e}\n{tb}")
-        return False, f"删除失败: {e}"
+            return True, "已删除"
+        except Exception as e:
+            return False, f"删除失败: {e}"
 
 # ========== 批量删除草稿 ==========
 def clear_all_drafts():
