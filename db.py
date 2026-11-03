@@ -527,3 +527,16 @@ def clear_all_responses():
 def backend_info():
     """返回当前后端信息"""
     return {"backend": BACKEND, "supabase_ready": _supabase_ready, "db_path": DB_PATH}
+
+def diagnose():
+    """诊断数据库连通性，返回 (是否正常, 详细说明)"""
+    info = backend_info()
+    if info["backend"] != "supabase":
+        return False, f"当前为本地 SQLite（未读到 SUPABASE_URL/SUPABASE_KEY，或 supabase 包未安装）"
+    if not _supabase_ready:
+        return False, "Supabase 客户端未初始化"
+    try:
+        supabase_client.table("admins").select("username").limit(1).execute()
+        return True, "连接正常，admins 表可访问"
+    except Exception as e:
+        return False, f"{type(e).__name__}: {str(e)[:300]}"

@@ -37,7 +37,9 @@ def check_admin_setup():
     """检查是否需要初始化管理员（SQLite / Supabase 通用）"""
     count = db.count_admins()
     if count < 0:
-        st.error("❌ 云数据库表不存在或无法访问，请先在 Supabase SQL Editor 执行建表 SQL（见 SUPABASE_SETUP.md）")
+        ok, detail = db.diagnose()
+        st.error("❌ 云数据库无法访问，管理员功能不可用")
+        st.code(detail, language="text")
         st.stop()
     return count == 0
 
