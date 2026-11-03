@@ -99,11 +99,26 @@ def auto_save():
     db.save_response(resp['response_id'], data)
     return progress
 
+# 必须在 next_page/prev_page/_on_jump_change 之前定义，否则回调函数里引用会报 NameError
+PAGE_NAMES = {
+    1: "📋 咨询说明",
+    2: "👤 专家信息",
+    3: "🏗️ 结构审查",
+    4: "🛠️ 设计后评价",
+    5: "🏗️ 施工后评价",
+    6: "🔍 技术状况后评价",
+    7: "💰 经济社会效益后评价",
+    8: "💡 补充指标建议",
+    9: "✅ 确认并提交",
+}
+
 def next_page():
     """下一页"""
     auto_save()
     if st.session_state.page < 9:
         st.session_state.page += 1
+    # 同步跳转下拉的 session_state 值，防止粘滞
+    st.session_state.jump_selectbox = f"{st.session_state.page}. {PAGE_NAMES[st.session_state.page]}"
     st.rerun()
 
 def prev_page():
@@ -111,7 +126,16 @@ def prev_page():
     auto_save()
     if st.session_state.page > 1:
         st.session_state.page -= 1
+    st.session_state.jump_selectbox = f"{st.session_state.page}. {PAGE_NAMES[st.session_state.page]}"
     st.rerun()
+
+def _on_jump_change():
+    """仅在用户主动修改下拉时触发跳转"""
+    sel = st.session_state.jump_selectbox
+    target = int(sel.split(".")[0])
+    if target != st.session_state.page:
+        auto_save()
+        st.session_state.page = target
 
 def rating_component(label, key_prefix, indicator_code, dimension, required=False):
     """通用五维评分组件"""
@@ -578,18 +602,6 @@ def page_submit():
     nav_buttons(show_submit_warning=True)
 
 # ============ 通用导航 ============
-PAGE_NAMES = {
-    1: "📋 咨询说明",
-    2: "👤 专家信息",
-    3: "🏗️ 结构审查",
-    4: "🛠️ 设计后评价",
-    5: "🏗️ 施工后评价",
-    6: "🔍 技术状况后评价",
-    7: "💰 经济社会效益后评价",
-    8: "💡 补充指标建议",
-    9: "✅ 确认并提交",
-}
-
 def nav_buttons(show_submit_warning=False):
     st.markdown("---")
     
@@ -606,15 +618,14 @@ def nav_buttons(show_submit_warning=False):
         current_name = PAGE_NAMES.get(st.session_state.page, f"第{st.session_state.page}步")
         st.markdown(f"**当前：{current_name}**")
         page_options = [f"{i}. {PAGE_NAMES[i]}" for i in range(1, 10)]
-        page_labels = list(PAGE_NAMES.values())
+        # 初始化：首次渲染时把 session_state 对齐到当前 page，后续由 on_change 控制
+        initial_label = f"{st.session_state.page}. {PAGE_NAMES[st.session_state.page]}"
+        if "jump_selectbox" not in st.session_state:
+            st.session_state.jump_selectbox = initial_label
         jump_sel = st.selectbox("快速跳转", page_options,
-            index=st.session_state.page - 1, key="jump_selectbox",
+            key="jump_selectbox",
+            on_change=_on_jump_change,
             help="可直接跳到任意填写步骤")
-        target_page = int(jump_sel.split(".")[0])
-        if target_page != st.session_state.page:
-            auto_save()
-            st.session_state.page = target_page
-            st.rerun()
     
     with col4:
         if st.session_state.page < 9:
